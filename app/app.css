@@ -90,3 +90,24 @@ textarea.plain-input{resize:vertical;font:inherit}
 .admin-task .grow{flex:1;min-width:0}.admin-task b{overflow-wrap:anywhere}
 .m-main .form{display:grid;gap:12px;margin-top:10px}
 .m-main .notice{margin:10px 0}
+
+/* ===== Perbaikan layar HP ===== */
+html,body{overflow-x:hidden;max-width:100%}
+.m-app{overflow-x:hidden}
+.m-main,.m-card,.m-box,.m-hero{min-width:0}
+.m-list{display:grid;gap:8px}
+.m-li{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border:1px solid var(--line);border-radius:16px;padding:12px 14px;background:#fff}
+.m-li-l{min-width:0;flex:1}.m-li-l b{display:block;font-size:15px;overflow-wrap:anywhere}
+.m-li small{display:block;color:#8594a1;font-size:12px;margin-top:3px}
+.m-li-r{text-align:right;display:grid;gap:4px;justify-items:end;flex:none}.m-li-r b{font-size:15px}
+@media(max-width:480px){
+  .m-card{padding:14px;border-radius:22px}
+  .m-hero{padding:18px;border-radius:22px}
+  .m-hero-amount{font-size:36px}
+  .m-btn{font-size:16px;padding:14px}
+  .m-seg-b{font-size:14px;padding:9px 12px}
+  .m-box{padding:14px}.m-box-head{font-size:16px}
+  .m-status-ok{font-size:16px;padding:12px 14px}
+  .m-title-row h1{font-size:22px}
+  .m-task h3{font-size:19px}.m-price b{font-size:22px}
+}
