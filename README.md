@@ -1,60 +1,46 @@
-# S3L ZERO99 — Task Platform V3
+# TUGAS HUB V4
 
-Aplikasi Next.js + Supabase untuk autentikasi, daftar tugas, pengajuan pengguna, panel admin, dan saldo berbasis persetujuan.
+Next.js 14 + Supabase starter for a legitimate task-management and review platform. It is not intended for creating, trading, or collecting credentials for third-party accounts. Never request passwords, OTPs, or recovery codes from task participants.
 
-## Fitur
-- Daftar dan login email/password melalui Supabase Auth.
-- Profil otomatis dibuat saat pendaftaran.
-- Dashboard pengguna; daftar tugas kosong sampai admin menerbitkan tugas.
-- Pengguna dapat mengajukan satu kali untuk setiap tugas.
-- Panel admin untuk membuat/nonaktifkan tugas dan menyetujui/menolak pengajuan.
-- Persetujuan menambahkan saldo dan transaksi secara atomik melalui RPC database.
-- Row Level Security (RLS) membatasi akses berdasarkan akun dan peran.
+## Requirements
+- Node.js 18.17+
+- A Supabase project
+- A Vercel project (optional)
 
-## 1. Buat proyek Supabase
-1. Buat proyek di https://supabase.com.
-2. Buka SQL Editor.
-3. Salin seluruh isi `supabase/schema.sql`, lalu jalankan.
-4. Buka Project Settings > API, salin Project URL dan `anon` public key.
+## Environment variables
+Create `.env.local` in the project root:
 
-## 2. Atur environment
-1. Duplikat `.env.example` menjadi `.env.local`.
-2. Isi:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3. Jangan pernah memasukkan `service_role` key ke frontend, GitHub, atau variabel `NEXT_PUBLIC_*`.
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_LEGACY_ANON_KEY
+```
 
-## 3. Jalankan lokal
+Use the Supabase Project URL and Publishable key (or legacy anon key). Never put the `service_role` or `sb_secret_` key in browser environment variables.
+
+## Database
+Run all of `supabase/schema.sql` in Supabase SQL Editor. If an older incompatible schema already exists, back it up and inspect it before applying migrations; do not drop existing tables blindly.
+
+After registering your own account, promote it to admin in Supabase SQL Editor:
+
+```sql
+UPDATE public.profiles SET role = 'admin' WHERE id = 'YOUR_AUTH_USER_UUID';
+```
+
+## Run locally
+
 ```bash
 npm install
 npm run dev
 ```
-Buka http://localhost:3000.
 
-## 4. Buat admin pertama
-1. Daftar akun biasa melalui `/auth`.
-2. Di Supabase, buka Authentication > Users, salin UUID akun.
-3. Jalankan SQL berikut di SQL Editor (ganti UUID):
-```sql
-update public.profiles
-set role = 'admin'
-where id = 'UUID_ADMIN_DI_SINI';
-```
-4. Logout lalu login kembali. Tombol Panel Admin akan muncul di dashboard. Panel juga bisa dibuka di `/admin`.
+Open http://localhost:3000. Routes: `/auth`, `/dashboard`, `/tugas`, `/riwayat`, `/saldo`, `/profil`, `/aturan`, `/admin`.
 
-Jangan memberi role admin kepada akun yang tidak dipercaya.
+## Deploy to Vercel
+1. Import the GitHub repository.
+2. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel Project Settings → Environment Variables for Production, Preview, and Development as needed.
+3. Redeploy after saving the variables.
 
-## 5. Deploy ke Vercel
-1. Push seluruh folder ini ke repository GitHub.
-2. Di Vercel, Import Project dari repository tersebut.
-3. Tambahkan dua Environment Variables yang sama dengan `.env.local`.
-4. Deploy. Jika mengubah environment variable, lakukan redeploy.
-5. Di Supabase > Authentication > URL Configuration, atur Site URL ke domain Vercel dan tambahkan URL redirect yang diperlukan.
+The fallback in `lib/supabase.ts` prevents prerender from crashing when variables are absent, but authentication/database requests will not work until valid values are configured.
 
-## Catatan penting
-- Tugas awal sengaja kosong. Tugas baru hanya muncul setelah admin membuatnya.
-- Ini adalah fondasi aplikasi tugas umum. Gunakan hanya untuk pekerjaan yang sah dan transparan.
-- Jangan meminta password, OTP, recovery code, atau data sensitif akun pihak ketiga.
-- Jangan gunakan platform untuk jual-beli akun, pembuatan akun massal, spam, atau mengakali verifikasi layanan.
-- Saldo dalam aplikasi adalah pencatatan internal, bukan integrasi pembayaran atau penarikan dana. Fitur pencairan perlu rancangan dan verifikasi terpisah.
-- Untuk produksi, aktifkan konfirmasi email, CAPTCHA/rate limit, kebijakan privasi, syarat layanan, audit log, dan validasi bukti tugas.
+## Google OAuth (optional)
+The auth page includes a Google sign-in button. Enable Google under Supabase Authentication → Providers and configure the Google OAuth credentials and redirect URLs. If Google OAuth is not configured, use email/password login or remove the Google button.
