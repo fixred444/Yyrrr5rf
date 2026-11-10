@@ -12,6 +12,8 @@ export type Profile = {
   balance: number;
   ewallet_method: "DANA" | "OVO" | "GoPay" | null;
   ewallet_number: string | null;
+  referral_code: string | null;
+  referred_by: string | null;
   created_at: string;
 };
 
