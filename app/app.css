@@ -120,3 +120,18 @@ html,body{overflow-x:hidden;max-width:100%}
 .m-timer{display:flex;align-items:center;gap:8px;background:#fff6df;border:1px solid #f4dfa6;color:#8a5f10;border-radius:14px;padding:10px 14px;margin-bottom:12px;font-size:15px}
 .m-timer b{font:800 20px 'Plus Jakarta Sans';margin-left:auto}
 .date{display:inline-flex;align-items:center;gap:4px}
+
+/* ===== Hilangkan kotak biru saat tombol disentuh ===== */
+*{-webkit-tap-highlight-color:transparent}
+button,a,input[type=button]{outline:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+button:focus,a:focus{outline:none}
+button:focus-visible,a:focus-visible{outline:2px solid #64b8ec;outline-offset:2px}
+button:active:not(:disabled),.m-quick-item:active,.m-nav-item:active{transform:scale(.97);transition:transform .08s}
+
+/* ===== Referral ===== */
+.m-lbl{display:block;font-weight:800;letter-spacing:1px;color:#5c6f80;font-size:11px;margin:4px 0 8px}
+.m-ref-code{font:800 34px 'Plus Jakarta Sans';letter-spacing:4px;text-align:center;background:#eef6fd;border:1px dashed #9cc8ef;border-radius:18px;padding:16px;color:#1b6fd8;margin-bottom:12px;overflow-wrap:anywhere}
+.m-ref-link{font-size:13px;background:#f5f9fc;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px;overflow-wrap:anywhere;color:#2b3f52;user-select:text;-webkit-user-select:text}
+.m-copy-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}.m-copy-row .m-btn{flex:1}
+.m-btn.alt{background:linear-gradient(105deg,#17c3b2,#0a98b8)}
+.sm-num{font-size:18px!important}
