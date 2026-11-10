@@ -135,3 +135,11 @@ button:active:not(:disabled),.m-quick-item:active,.m-nav-item:active{transform:s
 .m-copy-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}.m-copy-row .m-btn{flex:1}
 .m-btn.alt{background:linear-gradient(105deg,#17c3b2,#0a98b8)}
 .sm-num{font-size:18px!important}
+
+/* ===== Admin: buka tugas ===== */
+.admin-wrap{border-top:1px solid var(--line);padding:6px 0 12px}
+.admin-wrap .admin-task,.admin-wrap .submission-row{border-top:0;padding-bottom:6px}
+.link-btn{border:0;background:transparent;color:#1b6fd8;font-weight:800;font-size:13px;padding:6px 0;cursor:pointer;text-align:left}
+.admin-wrap>.link-btn{margin-left:2px}
+.submission-info .link-btn{display:block;margin-top:2px}
+.admin-wrap .m-instr{margin-top:8px;margin-bottom:0}
