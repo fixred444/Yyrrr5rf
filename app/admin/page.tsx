@@ -8,8 +8,9 @@ import Shell, { Loading } from "@/components/Shell";
 import { dateTime, rupiah, STATUS_LABEL } from "@/lib/format";
 import { Plus, Trash2, Check, X, Eye, EyeOff, ClipboardList, Inbox, Banknote, Users } from "lucide-react";
 
-type Task = { id: string; title: string; reward: number; duration_minutes: number; status: string; claimed_by: string | null; due_at: string | null; submitted_at: string | null; created_at: string; task_details: { instructions: string } | { instructions: string }[] | null };
-type Sub = { id: string; status: string; created_at: string; task: { title: string; reward: number } | null; user: { full_name: string | null; email: string | null } | null };
+type Task = { id: string; title: string; reward: number; duration_minutes: number; status: string; claimed_by: string | null; claimed_at: string | null; due_at: string | null; submitted_at: string | null; created_at: string; task_details: { instructions: string } | { instructions: string }[] | null };
+type Det = { instructions: string } | { instructions: string }[] | null;
+type Sub = { id: string; status: string; created_at: string; task: { title: string; reward: number; duration_minutes: number; claimed_at: string | null; task_details: Det } | null; user: { full_name: string | null; email: string | null } | null };
 type Wd = { id: string; method: string; account_number: string; amount: number; status: string; created_at: string; user: { full_name: string | null; email: string | null } | null };
 type Usr = { id: string; full_name: string | null; email: string | null; role: string; balance: number; created_at: string };
 type Tab = "tugas" | "review" | "tarik" | "user";
@@ -28,13 +29,14 @@ export default function Admin() {
   const [reward, setReward] = useState("4000");
   const [duration, setDuration] = useState("60");
   const [bonus, setBonus] = useState("500");
+  const [openId, setOpenId] = useState<string | null>(null);
   const [bulk, setBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
 
   const load = useCallback(async () => {
     const [t, s, w, u] = await Promise.all([
       supabase.from("tasks").select("*,task_details(instructions)").order("created_at", { ascending: false }),
-      supabase.from("submissions").select("id,status,created_at,task:tasks(title,reward),user:profiles(full_name,email)").order("created_at", { ascending: false }),
+      supabase.from("submissions").select("id,status,created_at,task:tasks(title,reward,duration_minutes,claimed_at,task_details(instructions)),user:profiles(full_name,email)").order("created_at", { ascending: false }),
       supabase.from("withdrawals").select("*,user:profiles(full_name,email)").order("created_at", { ascending: false }),
       supabase.from("profiles").select("id,full_name,email,role,balance,created_at").order("created_at", { ascending: false })
     ]);
@@ -58,6 +60,9 @@ export default function Admin() {
     return u ? (u.full_name || u.email || "user") : "-";
   };
   const flash = (ok: boolean, text: string) => setMsg({ ok, text });
+  const insOf = (d: Det | undefined) => (Array.isArray(d) ? d[0]?.instructions : d?.instructions) || "(tanpa instruksi)";
+  const used = (a: string | null | undefined, b: string | null | undefined) =>
+    a && b ? Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000)) : null;
   const stateOf = (t: Task) => {
     if (!t.claimed_by) return "Belum diambil";
     const who = nameOf(t.claimed_by);
@@ -165,13 +170,24 @@ export default function Admin() {
             <h2 className="m-h2">Daftar Tugas ({tasks.length})</h2>
             {tasks.length === 0 && <p className="center muted">Belum ada tugas.</p>}
             {tasks.map(t => (
-              <div key={t.id} className="admin-task">
+              <div key={t.id} className="admin-wrap">
+              <div className="admin-task">
                 <div className="grow">
                   <b>{t.title}</b>
                   <small>{rupiah(t.reward)} · {t.duration_minutes} mnt · {t.status === "active" ? "Aktif" : "Nonaktif"} · {stateOf(t)}</small>
                 </div>
                 <button className="icon-btn" title={t.status === "active" ? "Nonaktifkan" : "Aktifkan"} onClick={() => toggle(t)}>{t.status === "active" ? <Eye size={18} /> : <EyeOff size={18} />}</button>
                 <button className="icon-btn danger" title="Hapus" onClick={() => del(t)}><Trash2 size={18} /></button>
+              </div>
+              <button className="link-btn" onClick={() => setOpenId(openId === t.id ? null : t.id)}>{openId === t.id ? "Tutup tugas" : "Buka tugas"}</button>
+              {openId === t.id && (
+                <div className="m-instr">
+                  <small>INSTRUKSI</small>
+                  <p>{insOf(t.task_details)}</p>
+                  <small>PEMANTAUAN</small>
+                  <p>{stateOf(t)}{t.claimed_at ? `\nMulai dikerjakan: ${dateTime(t.claimed_at)}` : ""}{t.submitted_at ? `\nDikirim: ${dateTime(t.submitted_at)}${used(t.claimed_at, t.submitted_at) !== null ? ` (${used(t.claimed_at, t.submitted_at)} menit dari ${t.duration_minutes} menit)` : ""}` : ""}</p>
+                </div>
+              )}
               </div>
             ))}
           </section>
@@ -183,11 +199,13 @@ export default function Admin() {
           <h2 className="m-h2">Pengajuan ({pendingSubs.length} pending)</h2>
           {subs.length === 0 && <p className="center muted">Belum ada pengajuan.</p>}
           {subs.map(s => (
-            <div key={s.id} className="submission-row">
+            <div key={s.id} className="admin-wrap">
+            <div className="submission-row">
               <div className="submission-info">
                 <b>{s.task?.title || "Tugas dihapus"}</b>
                 <span>{s.user?.full_name || "-"} · {s.user?.email}</span>
                 <small>{dateTime(s.created_at)} · {rupiah(s.task?.reward)}</small>
+                <button className="link-btn" onClick={() => setOpenId(openId === s.id ? null : s.id)}>{openId === s.id ? "Tutup tugas" : "Buka tugas"}</button>
               </div>
               {s.status === "pending" ? (
                 <div className="submission-actions">
@@ -195,6 +213,15 @@ export default function Admin() {
                   <button className="reject" onClick={() => review(s.id, "rejected")}><X size={15} /> Tolak</button>
                 </div>
               ) : <span className={`status ${s.status}`}>{STATUS_LABEL[s.status]}</span>}
+            </div>
+            {openId === s.id && s.task && (
+              <div className="m-instr">
+                <small>INSTRUKSI</small>
+                <p>{insOf(s.task.task_details)}</p>
+                <small>RINCIAN</small>
+                <p>{`Imbalan ${rupiah(s.task.reward)} · durasi ${s.task.duration_minutes} menit`}{s.task.claimed_at ? `\nMulai dikerjakan: ${dateTime(s.task.claimed_at)}` : ""}{`\nDikirim: ${dateTime(s.created_at)}`}{used(s.task.claimed_at, s.created_at) !== null ? ` (${used(s.task.claimed_at, s.created_at)} menit)` : ""}{`\nPengerja: ${s.user?.full_name || "-"} (${s.user?.email})`}</p>
+              </div>
+            )}
             </div>
           ))}
         </section>
