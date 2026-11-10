@@ -27,6 +27,7 @@ export default function Admin() {
   const [desc, setDesc] = useState("");
   const [reward, setReward] = useState("4000");
   const [duration, setDuration] = useState("60");
+  const [bonus, setBonus] = useState("500");
   const [bulk, setBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
 
@@ -44,6 +45,11 @@ export default function Admin() {
   }, []);
 
   useEffect(() => { if (profile) load(); }, [profile, load]);
+  useEffect(() => {
+    if (!profile) return;
+    supabase.from("app_settings").select("value").eq("key", "referral_bonus").maybeSingle()
+      .then(({ data }) => setBonus(data?.value ?? "500"));
+  }, [profile]);
 
   if (loading || !profile) return <Loading />;
 
@@ -84,6 +90,11 @@ export default function Admin() {
     flash(true, `${items.length} tugas ditambahkan.`);
     setTitle(""); setBulkText(""); setDesc("");
     load();
+  }
+
+  async function saveBonus() {
+    const { error } = await supabase.from("app_settings").upsert({ key: "referral_bonus", value: String(Number(bonus) || 0) });
+    flash(!error, error ? error.message : "Bonus referral disimpan.");
   }
 
   async function toggle(t: Task) {
@@ -213,6 +224,12 @@ export default function Admin() {
 
       {tab === "user" && (
         <section className="m-card">
+          <h2 className="m-h2">Bonus Referral</h2>
+          <div className="m-inline">
+            <input className="plain-input" inputMode="numeric" placeholder="Bonus (Rp)" value={bonus} onChange={e => setBonus(e.target.value.replace(/\D/g, ""))} />
+            <button className="m-btn sm" onClick={saveBonus}>Simpan</button>
+          </div>
+          <p className="muted sm">Dibayar ke pengajak sekali, saat tugas pertama orang yang diajak disetujui.</p>
           <h2 className="m-h2">Pengguna ({users.length})</h2>
           {users.map(u => (
             <div key={u.id} className="history-row">
