@@ -229,7 +229,7 @@ export default function Admin() {
             <input className="plain-input" inputMode="numeric" placeholder="Bonus (Rp)" value={bonus} onChange={e => setBonus(e.target.value.replace(/\D/g, ""))} />
             <button className="m-btn sm" onClick={saveBonus}>Simpan</button>
           </div>
-          <p className="muted sm">Dibayar ke pengajak sekali, saat tugas pertama orang yang diajak disetujui.</p>
+          <p className="muted sm">Dibayar ke pengajak setiap kali satu tugas orang yang diajak disetujui.</p>
           <h2 className="m-h2">Pengguna ({users.length})</h2>
           {users.map(u => (
             <div key={u.id} className="history-row">
