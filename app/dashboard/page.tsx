@@ -6,10 +6,10 @@ import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import Shell, { Loading } from "@/components/Shell";
 import { rupiah } from "@/lib/format";
-import { Download, History, Send, Wallet, ScrollText, User, ShieldCheck, CheckCircle2, Clock, XCircle, ListChecks, ChevronRight, Scale } from "lucide-react";
+import { Download, History, Send, Wallet, ScrollText, Gift, CheckCircle2, Clock, XCircle, ListChecks, ChevronRight, Scale } from "lucide-react";
 
 export default function Dashboard() {
-  const { profile, loading } = useProfile();
+  const { profile, loading, reload } = useProfile();
   const [stat, setStat] = useState({ approved: 0, pending: 0, rejected: 0, open: 0 });
 
   useEffect(() => {
@@ -26,6 +26,18 @@ export default function Dashboard() {
     })();
   }, [profile]);
 
+  useEffect(() => {
+    if (!profile) return;
+    let r: string | null = null;
+    try { r = localStorage.getItem("th_ref"); } catch { /* abaikan */ }
+    if (!r) return;
+    (async () => {
+      if (!profile.referred_by) await supabase.rpc("apply_referral", { p_code: r });
+      try { localStorage.removeItem("th_ref"); } catch { /* abaikan */ }
+      reload();
+    })();
+  }, [profile, reload]);
+
   if (loading || !profile) return <Loading />;
 
   const quick = [
@@ -33,9 +45,7 @@ export default function Dashboard() {
     { href: "/riwayat", label: "Riwayat", icon: <History size={26} />, cls: "c-green" },
     { href: "/saldo", label: "Saldo", icon: <Wallet size={26} />, cls: "c-orange" },
     { href: "/aturan", label: "Rules", icon: <ScrollText size={26} />, cls: "c-purple" },
-    profile.role === "admin"
-      ? { href: "/admin", label: "Admin", icon: <ShieldCheck size={26} />, cls: "c-teal" }
-      : { href: "/profil", label: "Profil", icon: <User size={26} />, cls: "c-teal" }
+    { href: "/referral", label: "Referral", icon: <Gift size={26} />, cls: "c-teal" }
   ];
 
   return (
