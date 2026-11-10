@@ -15,12 +15,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (!profile) return;
     (async () => {
-      const [{ data: subs }, { count }] = await Promise.all([
+      const [{ data: subs }, { data: tk }] = await Promise.all([
         supabase.from("submissions").select("status").eq("user_id", profile.id),
-        supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "active").is("claimed_by", null)
+        supabase.from("tasks").select("claimed_by,submitted_at,due_at").eq("status", "active")
       ]);
       const c = (s: string) => (subs || []).filter(x => x.status === s).length;
-      setStat({ approved: c("approved"), pending: c("pending"), rejected: c("rejected"), open: count || 0 });
+      const nowMs = Date.now();
+      const open = (tk || []).filter(t => !t.claimed_by || (!t.submitted_at && t.due_at && new Date(t.due_at).getTime() <= nowMs)).length;
+      setStat({ approved: c("approved"), pending: c("pending"), rejected: c("rejected"), open });
     })();
   }, [profile]);
 
