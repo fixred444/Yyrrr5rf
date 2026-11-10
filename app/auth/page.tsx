@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { BRAND, BRAND_A, BRAND_B } from "@/lib/brand";
-import { Mail, LockKeyhole, UserRound, Eye, EyeOff, ArrowRight, Sparkles } from "lucide-react";
+import { Mail, LockKeyhole, UserRound, Eye, EyeOff, ArrowRight, Sparkles, Gift } from "lucide-react";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -16,15 +16,24 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [ref, setRef] = useState("");
+
+  useEffect(() => {
+    try {
+      const r = new URLSearchParams(window.location.search).get("ref");
+      if (r) { setRef(r.toUpperCase()); setMode("signup"); localStorage.setItem("th_ref", r.toUpperCase()); }
+    } catch { /* abaikan */ }
+  }, []);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setBusy(true); setMessage(""); setSuccess(false);
     try {
       if (mode === "signup") {
         if (name.trim().length < 3) throw new Error("Nama minimal 3 karakter.");
+        try { if (ref.trim()) localStorage.setItem("th_ref", ref.trim().toUpperCase()); } catch { /* abaikan */ }
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(), password,
-          options: { data: { full_name: name.trim() }, emailRedirectTo: `${window.location.origin}/auth` }
+          options: { data: { full_name: name.trim(), ref_code: ref.trim().toUpperCase() }, emailRedirectTo: `${window.location.origin}/auth` }
         });
         if (error) throw error;
         if (data.session) { router.replace("/dashboard"); router.refresh(); }
@@ -64,6 +73,7 @@ export default function AuthPage() {
       <div className="divider"><span />atau<span /></div>
       <form onSubmit={submit} className="form">
         {mode === "signup" && <label>Nama lengkap<div className="input"><UserRound size={19} /><input type="text" placeholder="Nama lengkap kamu" value={name} onChange={e => setName(e.target.value)} required minLength={3} /></div></label>}
+        {mode === "signup" && <label>Kode referral <span className="muted">(opsional)</span><div className="input"><Gift size={19} /><input type="text" placeholder="KODE DARI TEMAN" value={ref} onChange={e => setRef(e.target.value.toUpperCase())} maxLength={12} /></div></label>}
         <label>Email<div className="input"><Mail size={19} /><input type="email" placeholder="anda@email.com" value={email} onChange={e => setEmail(e.target.value)} required /></div></label>
         <label>Password<div className="input"><LockKeyhole size={19} /><input type={showPassword ? "text" : "password"} placeholder="Minimal 6 karakter" value={password} onChange={e => setPassword(e.target.value)} minLength={6} required /><button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}>{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></label>
         {message && <div className={success ? "notice success" : "notice"} role="status">{message}</div>}
