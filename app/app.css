@@ -111,3 +111,12 @@ html,body{overflow-x:hidden;max-width:100%}
   .m-title-row h1{font-size:22px}
   .m-task h3{font-size:19px}.m-price b{font-size:22px}
 }
+
+/* ===== Tugas privat + timer ===== */
+.m-task.active{border-color:#7fb8f5;box-shadow:0 0 0 3px #1b6fd81a}
+.m-instr{background:#f3f8fd;border:1px solid #dbeaf7;border-radius:16px;padding:12px 14px;margin-bottom:12px}
+.m-instr small{font-weight:800;letter-spacing:1px;color:#2b7bc6;font-size:11px}
+.m-instr p{margin:6px 0 0;color:#2b3f52;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.m-timer{display:flex;align-items:center;gap:8px;background:#fff6df;border:1px solid #f4dfa6;color:#8a5f10;border-radius:14px;padding:10px 14px;margin-bottom:12px;font-size:15px}
+.m-timer b{font:800 20px 'Plus Jakarta Sans';margin-left:auto}
+.date{display:inline-flex;align-items:center;gap:4px}
