@@ -8,7 +8,7 @@ import Shell, { Loading } from "@/components/Shell";
 import { dateTime, rupiah, STATUS_LABEL } from "@/lib/format";
 import { Plus, Trash2, Check, X, Eye, EyeOff, ClipboardList, Inbox, Banknote, Users } from "lucide-react";
 
-type Task = { id: string; title: string; description: string; reward: number; status: string; claimed_by: string | null; created_at: string };
+type Task = { id: string; title: string; reward: number; duration_minutes: number; status: string; claimed_by: string | null; due_at: string | null; submitted_at: string | null; created_at: string; task_details: { instructions: string } | { instructions: string }[] | null };
 type Sub = { id: string; status: string; created_at: string; task: { title: string; reward: number } | null; user: { full_name: string | null; email: string | null } | null };
 type Wd = { id: string; method: string; account_number: string; amount: number; status: string; created_at: string; user: { full_name: string | null; email: string | null } | null };
 type Usr = { id: string; full_name: string | null; email: string | null; role: string; balance: number; created_at: string };
@@ -26,12 +26,13 @@ export default function Admin() {
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
   const [reward, setReward] = useState("4000");
+  const [duration, setDuration] = useState("60");
   const [bulk, setBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
 
   const load = useCallback(async () => {
     const [t, s, w, u] = await Promise.all([
-      supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+      supabase.from("tasks").select("*,task_details(instructions)").order("created_at", { ascending: false }),
       supabase.from("submissions").select("id,status,created_at,task:tasks(title,reward),user:profiles(full_name,email)").order("created_at", { ascending: false }),
       supabase.from("withdrawals").select("*,user:profiles(full_name,email)").order("created_at", { ascending: false }),
       supabase.from("profiles").select("id,full_name,email,role,balance,created_at").order("created_at", { ascending: false })
@@ -51,21 +52,36 @@ export default function Admin() {
     return u ? (u.full_name || u.email || "user") : "-";
   };
   const flash = (ok: boolean, text: string) => setMsg({ ok, text });
+  const stateOf = (t: Task) => {
+    if (!t.claimed_by) return "Belum diambil";
+    const who = nameOf(t.claimed_by);
+    if (t.submitted_at) return `Sudah dikirim: ${who}`;
+    if (t.due_at && new Date(t.due_at).getTime() > Date.now()) return `Dikerjakan ${who} sampai ${dateTime(t.due_at)}`;
+    return "Waktu habis (tersedia lagi)";
+  };
 
   async function addTask(e: React.FormEvent) {
     e.preventDefault(); setMsg(null);
     const r = Number(reward) || 0;
-    let rows: { title: string; description: string; reward: number }[];
+    const d = Number(duration) || 0;
+    if (d < 1) return flash(false, "Durasi minimal 1 menit.");
+    let items: { title: string; ins: string }[];
     if (bulk) {
-      rows = bulkText.split("\n").map(l => l.trim()).filter(Boolean).map(l => ({ title: l, description: desc.trim(), reward: r }));
-      if (!rows.length) return flash(false, "Isi minimal satu baris tugas.");
+      items = bulkText.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+        const i = l.indexOf("|");
+        return i >= 0 ? { title: l.slice(0, i).trim(), ins: l.slice(i + 1).trim() || desc.trim() } : { title: l, ins: desc.trim() };
+      });
+      if (!items.length) return flash(false, "Isi minimal satu baris tugas.");
     } else {
       if (!title.trim()) return flash(false, "Judul tugas wajib diisi.");
-      rows = [{ title: title.trim(), description: desc.trim(), reward: r }];
+      if (!desc.trim()) return flash(false, "Instruksi tugas wajib diisi.");
+      items = [{ title: title.trim(), ins: desc.trim() }];
     }
-    const { error } = await supabase.from("tasks").insert(rows);
-    if (error) return flash(false, error.message);
-    flash(true, `${rows.length} tugas ditambahkan.`);
+    for (const it of items) {
+      const { error } = await supabase.rpc("create_tasks", { p_titles: [it.title], p_instructions: it.ins, p_reward: r, p_duration: d });
+      if (error) return flash(false, error.message);
+    }
+    flash(true, `${items.length} tugas ditambahkan.`);
     setTitle(""); setBulkText(""); setDesc("");
     load();
   }
@@ -124,13 +140,14 @@ export default function Admin() {
                 <button type="button" className={`m-seg-b ${bulk ? "on" : ""}`} onClick={() => setBulk(true)}>Banyak sekaligus</button>
               </div>
               {bulk
-                ? <textarea className="plain-input" rows={6} placeholder={"Satu baris = satu tugas\nContoh: Isi survei A\nContoh: Isi survei B"} value={bulkText} onChange={e => setBulkText(e.target.value)} />
-                : <input className="plain-input" placeholder="Judul tugas" value={title} onChange={e => setTitle(e.target.value)} />}
-              <textarea className="plain-input" rows={4} placeholder={bulk ? "Instruksi (dipakai untuk semua tugas di atas)" : "Instruksi / deskripsi tugas"} value={desc} onChange={e => setDesc(e.target.value)} />
+                ? <textarea className="plain-input" rows={6} placeholder={"Satu baris = satu tugas\nFormat: Judul | Instruksi\nContoh: Isi survei A | Buka link ... lalu isi"} value={bulkText} onChange={e => setBulkText(e.target.value)} />
+                : <input className="plain-input" placeholder="Judul tugas (ini yang tampil di luar)" value={title} onChange={e => setTitle(e.target.value)} />}
+              <textarea className="plain-input" rows={4} placeholder={bulk ? "Instruksi umum (dipakai jika baris tidak punya tanda |)" : "Instruksi (hanya tampil setelah user menekan Kerjakan)"} value={desc} onChange={e => setDesc(e.target.value)} />
               <input className="plain-input" inputMode="numeric" placeholder="Imbalan (Rp)" value={reward} onChange={e => setReward(e.target.value.replace(/\D/g, ""))} />
+              <input className="plain-input" inputMode="numeric" placeholder="Waktu pengerjaan (menit)" value={duration} onChange={e => setDuration(e.target.value.replace(/\D/g, ""))} />
               <button className="m-btn" type="submit">Tambah Tugas</button>
             </form>
-            <p className="muted sm">Setiap tugas hanya bisa diambil satu user. Siapa yang klik &quot;Sudah Dikerjakan&quot; lebih dulu mendapatkannya; jika kamu tolak, tugas dibuka lagi.</p>
+            <p className="muted sm">Di luar, user hanya melihat judul. Instruksi muncul setelah user menekan Kerjakan, dan tugas terkunci untuk user itu selama waktu pengerjaan. Jika waktu habis atau kamu tolak, tugas dibuka lagi.</p>
           </section>
 
           <section className="m-card">
@@ -140,7 +157,7 @@ export default function Admin() {
               <div key={t.id} className="admin-task">
                 <div className="grow">
                   <b>{t.title}</b>
-                  <small>{rupiah(t.reward)} · {t.status === "active" ? "Aktif" : "Nonaktif"} · {t.claimed_by ? `Diambil: ${nameOf(t.claimed_by)}` : "Belum diambil"}</small>
+                  <small>{rupiah(t.reward)} · {t.duration_minutes} mnt · {t.status === "active" ? "Aktif" : "Nonaktif"} · {stateOf(t)}</small>
                 </div>
                 <button className="icon-btn" title={t.status === "active" ? "Nonaktifkan" : "Aktifkan"} onClick={() => toggle(t)}>{t.status === "active" ? <Eye size={18} /> : <EyeOff size={18} />}</button>
                 <button className="icon-btn danger" title="Hapus" onClick={() => del(t)}><Trash2 size={18} /></button>
