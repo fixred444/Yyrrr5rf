@@ -7,7 +7,7 @@ import Shell, { Loading } from "@/components/Shell";
 import { dateTime, rupiah } from "@/lib/format";
 import { Gift, Copy, Share2, Users, Check } from "lucide-react";
 
-type R = { full_name: string | null; joined_at: string; bonus_paid: boolean };
+type R = { full_name: string | null; joined_at: string; approved_count: number; earned: number };
 
 export default function Referral() {
   const { profile, loading } = useProfile();
@@ -52,7 +52,7 @@ export default function Referral() {
     <Shell profile={profile} active="none">
       <section className="m-banner teal">
         <h1><Gift size={28} /> Referral</h1>
-        <p>Ajak teman. Kamu dapat <b>{rupiah(bonus)}</b> saat tugas pertama temanmu disetujui admin.</p>
+        <p>Ajak teman. Kamu dapat <b>{rupiah(bonus)}</b> <b>setiap kali</b> tugas temanmu disetujui admin.</p>
       </section>
 
       <section className="m-card">
@@ -80,8 +80,8 @@ export default function Referral() {
         {list.length === 0 && <p className="center muted">Belum ada. Bagikan linkmu untuk mulai.</p>}
         {list.map((r, i) => (
           <div key={i} className="history-row">
-            <div><b>{r.full_name || "Pengguna"}</b><small>Bergabung {dateTime(r.joined_at)}</small></div>
-            <span className={`status ${r.bonus_paid ? "approved" : "pending"}`}>{r.bonus_paid ? "Bonus cair" : "Menunggu tugas"}</span>
+            <div><b>{r.full_name || "Pengguna"}</b><small>{r.approved_count} tugas disetujui · bergabung {dateTime(r.joined_at)}</small></div>
+            <span className={`status ${r.earned > 0 ? "approved" : "pending"}`}>{r.earned > 0 ? `+${rupiah(r.earned)}` : "Belum ada tugas"}</span>
           </div>
         ))}
       </section>
