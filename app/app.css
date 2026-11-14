@@ -147,3 +147,23 @@ button:active:not(:disabled),.m-quick-item:active,.m-nav-item:active{transform:s
 /* ===== Kuota ===== */
 .m-quota{display:flex;align-items:center;gap:6px;color:#5c6f80;font-size:14px;margin:-6px 0 14px}.m-quota b{color:#1b6fd8}
 .m-instr p+p{border-top:1px dashed #cfe2f3;padding-top:8px}
+
+/* ===== VIP ===== */
+.m-banner.gold{background:linear-gradient(135deg,#f5a623,#e8590c)}
+.m-round.gold{background:linear-gradient(135deg,#f7b733,#e8590c)}
+.m-vip-card{border:1px solid #f6dca4;background:linear-gradient(135deg,#fffaf0,#fff)}
+.m-vip-badge{background:linear-gradient(135deg,#f7b733,#e8590c);color:#fff;font-weight:800;font-size:13px;border-radius:30px;padding:8px 13px;text-decoration:none;margin-left:auto;margin-right:8px}
+.m-vip-hint{display:flex;align-items:center;gap:5px;color:#c26a0a;font-size:13px;font-weight:700;margin-top:4px}
+.m-btn.vip{background:linear-gradient(105deg,#f7b733,#e8590c);text-decoration:none;box-shadow:0 8px 18px #e8590c33}
+.m-benefit{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.m-benefit:first-of-type{border-top:0}
+.m-benefit svg{color:#e8890c;flex:none;margin-top:2px}.m-benefit b{display:block}.m-benefit small{color:#778797;line-height:1.5}
+.m-steps{padding-left:20px;line-height:1.8;margin:0 0 12px}
+.m-pay{background:#fff8e8;border:1px dashed #f0c46a;border-radius:18px;padding:16px;text-align:center;margin-bottom:12px}
+.m-pay small{display:block;letter-spacing:1px;font-weight:800;color:#a8700f;font-size:11px}
+.m-pay b{display:block;font:800 32px 'Plus Jakarta Sans';color:#c26a0a;margin:4px 0}.m-pay span{font-size:13px;color:#8a6a2a}
+.m-hero-note.dark{background:#eef4fa;color:#4a5f72;margin:0 0 12px}
+.m-qris{width:100%;max-width:340px;display:block;margin:14px auto;border:1px solid var(--line);border-radius:16px;background:#fff;padding:8px}
+a.m-btn{text-decoration:none}
+.m-check{display:flex;align-items:center;gap:8px;font-weight:700;color:#5c6f80}
+.m-check input{width:20px;height:20px}
