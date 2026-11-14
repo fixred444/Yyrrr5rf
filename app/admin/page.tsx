@@ -6,15 +6,16 @@ import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import Shell, { Loading } from "@/components/Shell";
 import { dateTime, rupiah, STATUS_LABEL } from "@/lib/format";
-import { Plus, Trash2, Check, X, Eye, EyeOff, ClipboardList, Inbox, Banknote, Users } from "lucide-react";
+import { Crown, Plus, Trash2, Check, X, Eye, EyeOff, ClipboardList, Inbox, Banknote, Users } from "lucide-react";
 
-type Task = { id: string; title: string; reward: number; duration_minutes: number; quota: number; status: string; created_at: string; task_details: { instructions: string } | { instructions: string }[] | null };
+type Task = { id: string; title: string; reward: number; duration_minutes: number; quota: number; vip_only: boolean; status: string; created_at: string; task_details: { instructions: string } | { instructions: string }[] | null };
 type Claim = { task_id: string; user_id: string; status: string; claimed_at: string; due_at: string; submitted_at: string | null; user: { full_name: string | null; email: string | null } | null };
 type Det = { instructions: string } | { instructions: string }[] | null;
 type Sub = { id: string; status: string; created_at: string; task_id: string; user_id: string; task: { title: string; reward: number; duration_minutes: number; task_details: Det } | null; user: { full_name: string | null; email: string | null } | null };
 type Wd = { id: string; method: string; account_number: string; amount: number; status: string; created_at: string; user: { full_name: string | null; email: string | null } | null };
 type Usr = { id: string; full_name: string | null; email: string | null; role: string; balance: number; created_at: string };
-type Tab = "tugas" | "review" | "tarik" | "user";
+type Tab = "tugas" | "review" | "tarik" | "user" | "vip";
+type VOrder = { id: string; amount: number; status: string; sender_note: string | null; created_at: string; user: { full_name: string | null; email: string | null } | null };
 
 export default function Admin() {
   const { profile, loading } = useProfile(true);
@@ -22,6 +23,9 @@ export default function Admin() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
+  const [orders, setOrders] = useState<VOrder[]>([]);
+  const [vipOnly, setVipOnly] = useState(false);
+  const [vip, setVip] = useState({ price: "20000", days: "30", pct: "20" });
   const [wds, setWds] = useState<Wd[]>([]);
   const [users, setUsers] = useState<Usr[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -37,25 +41,31 @@ export default function Admin() {
   const [bulkText, setBulkText] = useState("");
 
   const load = useCallback(async () => {
-    const [t, s, w, u, c] = await Promise.all([
+    const [t, s, w, u, c, o] = await Promise.all([
       supabase.from("tasks").select("*,task_details(instructions)").order("created_at", { ascending: false }),
       supabase.from("submissions").select("id,status,created_at,task_id,user_id,task:tasks(title,reward,duration_minutes,task_details(instructions)),user:profiles(full_name,email)").order("created_at", { ascending: false }),
       supabase.from("withdrawals").select("*,user:profiles(full_name,email)").order("created_at", { ascending: false }),
       supabase.from("profiles").select("id,full_name,email,role,balance,created_at").order("created_at", { ascending: false }),
-      supabase.from("task_claims").select("task_id,user_id,status,claimed_at,due_at,submitted_at,user:profiles(full_name,email)").order("claimed_at", { ascending: false })
+      supabase.from("task_claims").select("task_id,user_id,status,claimed_at,due_at,submitted_at,user:profiles(full_name,email)").order("claimed_at", { ascending: false }),
+      supabase.from("vip_orders").select("*,user:profiles(full_name,email)").order("created_at", { ascending: false })
     ]);
     setTasks((t.data || []) as Task[]);
     setSubs((s.data || []) as unknown as Sub[]);
     setWds((w.data || []) as unknown as Wd[]);
     setUsers((u.data || []) as Usr[]);
     setClaims((c.data || []) as unknown as Claim[]);
+    setOrders((o.data || []) as unknown as VOrder[]);
   }, []);
 
   useEffect(() => { if (profile) load(); }, [profile, load]);
   useEffect(() => {
     if (!profile) return;
-    supabase.from("app_settings").select("value").eq("key", "referral_bonus").maybeSingle()
-      .then(({ data }) => setBonus(data?.value ?? "500"));
+    supabase.from("app_settings").select("key,value").in("key", ["referral_bonus", "vip_price", "vip_days", "vip_bonus_percent"])
+      .then(({ data }) => {
+        const m = Object.fromEntries((data || []).map(x => [x.key, x.value]));
+        setBonus(m.referral_bonus ?? "500");
+        setVip({ price: m.vip_price ?? "20000", days: m.vip_days ?? "30", pct: m.vip_bonus_percent ?? "20" });
+      });
   }, [profile]);
 
   if (loading || !profile) return <Loading />;
@@ -93,11 +103,26 @@ export default function Admin() {
       items = [{ title: title.trim(), ins: desc.trim() }];
     }
     for (const it of items) {
-      const { error } = await supabase.rpc("create_tasks", { p_titles: [it.title], p_instructions: it.ins, p_reward: r, p_duration: d, p_quota: qt });
+      const { error } = await supabase.rpc("create_tasks", { p_titles: [it.title], p_instructions: it.ins, p_reward: r, p_duration: d, p_quota: qt, p_vip: vipOnly });
       if (error) return flash(false, error.message);
     }
     flash(true, `${items.length} tugas ditambahkan.`);
     setTitle(""); setBulkText(""); setDesc("");
+    load();
+  }
+
+  async function saveVip() {
+    const rows = [
+      { key: "vip_price", value: String(Number(vip.price) || 0) },
+      { key: "vip_days", value: String(Number(vip.days) || 0) },
+      { key: "vip_bonus_percent", value: String(Number(vip.pct) || 0) }
+    ];
+    const { error } = await supabase.from("app_settings").upsert(rows);
+    flash(!error, error ? error.message : "Pengaturan VIP disimpan.");
+  }
+  async function reviewOrder(id: string, status: "approved" | "rejected") {
+    const { error } = await supabase.rpc("review_vip_order", { p_id: id, p_status: status });
+    flash(!error, error ? error.message : status === "approved" ? "VIP diaktifkan untuk user." : "Pesanan ditolak.");
     load();
   }
 
@@ -128,6 +153,7 @@ export default function Admin() {
 
   const pendingSubs = subs.filter(s => s.status === "pending");
   const pendingWds = wds.filter(w => w.status === "pending");
+  const pendingOrders = orders.filter(o => o.status === "pending");
   const tabBtn = (k: Tab, label: string, icon: React.ReactNode, n?: number) => (
     <button key={k} className={`m-tab ${tab === k ? "on" : ""}`} onClick={() => { setTab(k); setMsg(null); }}>
       {icon}{label}{!!n && <span className="m-count">{n}</span>}
@@ -145,6 +171,7 @@ export default function Admin() {
         {tabBtn("tugas", "Tugas", <ClipboardList size={16} />)}
         {tabBtn("review", "Review", <Inbox size={16} />, pendingSubs.length)}
         {tabBtn("tarik", "Penarikan", <Banknote size={16} />, pendingWds.length)}
+        {tabBtn("vip", "VIP", <Crown size={16} />, pendingOrders.length)}
         {tabBtn("user", "User", <Users size={16} />)}
       </div>
 
@@ -166,6 +193,7 @@ export default function Admin() {
               <input className="plain-input" inputMode="numeric" placeholder="Imbalan (Rp)" value={reward} onChange={e => setReward(e.target.value.replace(/\D/g, ""))} />
               <input className="plain-input" inputMode="numeric" placeholder="Waktu pengerjaan (menit)" value={duration} onChange={e => setDuration(e.target.value.replace(/\D/g, ""))} />
               <input className="plain-input" inputMode="numeric" placeholder="Kuota (berapa user berbeda yang boleh mengerjakan)" value={quota} onChange={e => setQuota(e.target.value.replace(/\D/g, ""))} />
+              <label className="m-check"><input type="checkbox" checked={vipOnly} onChange={e => setVipOnly(e.target.checked)} /> <Crown size={16} /> Khusus akun VIP</label>
               <button className="m-btn" type="submit">Tambah Tugas</button>
             </form>
             <p className="muted sm">Di luar, user hanya melihat judul. Instruksi muncul setelah user menekan Kerjakan. Tugas bisa dikerjakan sebanyak kuota, oleh akun yang berbeda-beda; satu akun hanya sekali. Jika waktu habis atau kamu tolak, slot kuotanya dibuka lagi untuk user lain.</p>
@@ -179,7 +207,7 @@ export default function Admin() {
               <div className="admin-task">
                 <div className="grow">
                   <b>{t.title}</b>
-                  <small>{rupiah(t.reward)} · {t.duration_minutes} mnt · {t.status === "active" ? "Aktif" : "Nonaktif"} · Kuota {usedOf(t.id)}/{t.quota}</small>
+                  <small>{rupiah(t.reward)} · {t.duration_minutes} mnt · {t.status === "active" ? "Aktif" : "Nonaktif"} · Kuota {usedOf(t.id)}/{t.quota}{t.vip_only ? " · 👑 VIP" : ""}</small>
                 </div>
                 <button className="icon-btn" title={t.status === "active" ? "Nonaktifkan" : "Aktifkan"} onClick={() => toggle(t)}>{t.status === "active" ? <Eye size={18} /> : <EyeOff size={18} />}</button>
                 <button className="icon-btn danger" title="Hapus" onClick={() => del(t)}><Trash2 size={18} /></button>
@@ -255,6 +283,43 @@ export default function Admin() {
             </div>
           ))}
         </section>
+      )}
+
+      {tab === "vip" && (
+        <>
+          <section className="m-card">
+            <h2 className="m-h2">Pengaturan VIP</h2>
+            <div className="form">
+              <label className="m-lbl">Harga VIP (Rp)</label>
+              <input className="plain-input" inputMode="numeric" value={vip.price} onChange={e => setVip({ ...vip, price: e.target.value.replace(/\D/g, "") })} />
+              <label className="m-lbl">Masa aktif (hari, 0 = selamanya)</label>
+              <input className="plain-input" inputMode="numeric" value={vip.days} onChange={e => setVip({ ...vip, days: e.target.value.replace(/\D/g, "") })} />
+              <label className="m-lbl">Kenaikan rate per tugas (%)</label>
+              <input className="plain-input" inputMode="numeric" value={vip.pct} onChange={e => setVip({ ...vip, pct: e.target.value.replace(/\D/g, "") })} />
+              <button className="m-btn" onClick={saveVip}>Simpan pengaturan</button>
+            </div>
+          </section>
+          <section className="m-card">
+            <h2 className="m-h2">Pesanan VIP ({pendingOrders.length} menunggu)</h2>
+            <p className="muted sm">Cocokkan nominal persis dengan mutasi QRIS kamu sebelum menyetujui.</p>
+            {orders.length === 0 && <p className="center muted">Belum ada pesanan.</p>}
+            {orders.map(o => (
+              <div key={o.id} className="submission-row">
+                <div className="submission-info">
+                  <b>{rupiah(o.amount)}</b>
+                  <span>{o.user?.full_name || "-"} · {o.user?.email}</span>
+                  <small>{dateTime(o.created_at)}{o.sender_note ? ` · ${o.sender_note}` : ""}</small>
+                </div>
+                {o.status === "pending" ? (
+                  <div className="submission-actions">
+                    <button className="approve" onClick={() => reviewOrder(o.id, "approved")}><Check size={15} /> Aktifkan</button>
+                    <button className="reject" onClick={() => reviewOrder(o.id, "rejected")}><X size={15} /> Tolak</button>
+                  </div>
+                ) : <span className={`status ${o.status}`}>{o.status === "approved" ? "Disetujui" : "Ditolak"}</span>}
+              </div>
+            ))}
+          </section>
+        </>
       )}
 
       {tab === "user" && (
