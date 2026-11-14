@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Mail, Home, History, Send, Wallet, User, ShieldCheck } from "lucide-react";
 import { BRAND_A, BRAND_B } from "@/lib/brand";
+import { isVip } from "@/lib/vip";
 import type { Profile } from "@/lib/useProfile";
 
 export type NavKey = "home" | "riwayat" | "tugas" | "saldo" | "profil" | "none";
@@ -26,6 +27,7 @@ export default function Shell({
           <span className="brand-icon sm"><Mail size={20} /></span>
           <span>{BRAND_A} <b>{BRAND_B}</b></span>
         </Link>
+        {isVip(profile) && <Link href="/vip" className="m-vip-badge">👑 VIP</Link>}
         {profile.role === "admin" && (
           <Link href="/admin" className="m-pill"><ShieldCheck size={16} /> Admin</Link>
         )}
