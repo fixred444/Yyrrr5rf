@@ -8,9 +8,10 @@ import Shell, { Loading } from "@/components/Shell";
 import { dateTime, rupiah, STATUS_LABEL } from "@/lib/format";
 import { Plus, Trash2, Check, X, Eye, EyeOff, ClipboardList, Inbox, Banknote, Users } from "lucide-react";
 
-type Task = { id: string; title: string; reward: number; duration_minutes: number; status: string; claimed_by: string | null; claimed_at: string | null; due_at: string | null; submitted_at: string | null; created_at: string; task_details: { instructions: string } | { instructions: string }[] | null };
+type Task = { id: string; title: string; reward: number; duration_minutes: number; quota: number; status: string; created_at: string; task_details: { instructions: string } | { instructions: string }[] | null };
+type Claim = { task_id: string; user_id: string; status: string; claimed_at: string; due_at: string; submitted_at: string | null; user: { full_name: string | null; email: string | null } | null };
 type Det = { instructions: string } | { instructions: string }[] | null;
-type Sub = { id: string; status: string; created_at: string; task: { title: string; reward: number; duration_minutes: number; claimed_at: string | null; task_details: Det } | null; user: { full_name: string | null; email: string | null } | null };
+type Sub = { id: string; status: string; created_at: string; task_id: string; user_id: string; task: { title: string; reward: number; duration_minutes: number; task_details: Det } | null; user: { full_name: string | null; email: string | null } | null };
 type Wd = { id: string; method: string; account_number: string; amount: number; status: string; created_at: string; user: { full_name: string | null; email: string | null } | null };
 type Usr = { id: string; full_name: string | null; email: string | null; role: string; balance: number; created_at: string };
 type Tab = "tugas" | "review" | "tarik" | "user";
@@ -20,6 +21,7 @@ export default function Admin() {
   const [tab, setTab] = useState<Tab>("tugas");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
+  const [claims, setClaims] = useState<Claim[]>([]);
   const [wds, setWds] = useState<Wd[]>([]);
   const [users, setUsers] = useState<Usr[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -28,22 +30,25 @@ export default function Admin() {
   const [desc, setDesc] = useState("");
   const [reward, setReward] = useState("4000");
   const [duration, setDuration] = useState("60");
+  const [quota, setQuota] = useState("1");
   const [bonus, setBonus] = useState("500");
   const [openId, setOpenId] = useState<string | null>(null);
   const [bulk, setBulk] = useState(false);
   const [bulkText, setBulkText] = useState("");
 
   const load = useCallback(async () => {
-    const [t, s, w, u] = await Promise.all([
+    const [t, s, w, u, c] = await Promise.all([
       supabase.from("tasks").select("*,task_details(instructions)").order("created_at", { ascending: false }),
-      supabase.from("submissions").select("id,status,created_at,task:tasks(title,reward,duration_minutes,claimed_at,task_details(instructions)),user:profiles(full_name,email)").order("created_at", { ascending: false }),
+      supabase.from("submissions").select("id,status,created_at,task_id,user_id,task:tasks(title,reward,duration_minutes,task_details(instructions)),user:profiles(full_name,email)").order("created_at", { ascending: false }),
       supabase.from("withdrawals").select("*,user:profiles(full_name,email)").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("id,full_name,email,role,balance,created_at").order("created_at", { ascending: false })
+      supabase.from("profiles").select("id,full_name,email,role,balance,created_at").order("created_at", { ascending: false }),
+      supabase.from("task_claims").select("task_id,user_id,status,claimed_at,due_at,submitted_at,user:profiles(full_name,email)").order("claimed_at", { ascending: false })
     ]);
     setTasks((t.data || []) as Task[]);
     setSubs((s.data || []) as unknown as Sub[]);
     setWds((w.data || []) as unknown as Wd[]);
     setUsers((u.data || []) as Usr[]);
+    setClaims((c.data || []) as unknown as Claim[]);
   }, []);
 
   useEffect(() => { if (profile) load(); }, [profile, load]);
@@ -55,27 +60,26 @@ export default function Admin() {
 
   if (loading || !profile) return <Loading />;
 
-  const nameOf = (id: string | null) => {
-    const u = users.find(x => x.id === id);
-    return u ? (u.full_name || u.email || "user") : "-";
-  };
   const flash = (ok: boolean, text: string) => setMsg({ ok, text });
   const insOf = (d: Det | undefined) => (Array.isArray(d) ? d[0]?.instructions : d?.instructions) || "(tanpa instruksi)";
   const used = (a: string | null | undefined, b: string | null | undefined) =>
     a && b ? Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000)) : null;
-  const stateOf = (t: Task) => {
-    if (!t.claimed_by) return "Belum diambil";
-    const who = nameOf(t.claimed_by);
-    if (t.submitted_at) return `Sudah dikirim: ${who}`;
-    if (t.due_at && new Date(t.due_at).getTime() > Date.now()) return `Dikerjakan ${who} sampai ${dateTime(t.due_at)}`;
-    return "Waktu habis (tersedia lagi)";
+  const claimsOf = (taskId: string) => claims.filter(c => c.task_id === taskId);
+  const isUsed = (c: Claim) => c.status === "submitted" || c.status === "approved" || (c.status === "working" && new Date(c.due_at).getTime() > Date.now());
+  const usedOf = (taskId: string) => claimsOf(taskId).filter(isUsed).length;
+  const claimLabel = (c: Claim) => {
+    if (c.status === "working") return new Date(c.due_at).getTime() > Date.now() ? `Sedang mengerjakan, sampai ${dateTime(c.due_at)}` : "Waktu habis (slot dibuka lagi)";
+    return ({ submitted: "Sudah dikirim", approved: "Disetujui", rejected: "Ditolak" } as Record<string, string>)[c.status] || c.status;
   };
+  const claimOfSub = (s: Sub) => claims.find(c => c.task_id === s.task_id && c.user_id === s.user_id);
 
   async function addTask(e: React.FormEvent) {
     e.preventDefault(); setMsg(null);
     const r = Number(reward) || 0;
     const d = Number(duration) || 0;
+    const qt = Number(quota) || 0;
     if (d < 1) return flash(false, "Durasi minimal 1 menit.");
+    if (qt < 1) return flash(false, "Kuota minimal 1.");
     let items: { title: string; ins: string }[];
     if (bulk) {
       items = bulkText.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
@@ -89,7 +93,7 @@ export default function Admin() {
       items = [{ title: title.trim(), ins: desc.trim() }];
     }
     for (const it of items) {
-      const { error } = await supabase.rpc("create_tasks", { p_titles: [it.title], p_instructions: it.ins, p_reward: r, p_duration: d });
+      const { error } = await supabase.rpc("create_tasks", { p_titles: [it.title], p_instructions: it.ins, p_reward: r, p_duration: d, p_quota: qt });
       if (error) return flash(false, error.message);
     }
     flash(true, `${items.length} tugas ditambahkan.`);
@@ -113,7 +117,7 @@ export default function Admin() {
   }
   async function review(id: string, status: "approved" | "rejected") {
     const { error } = await supabase.rpc("review_submission", { submission_id: id, new_status: status });
-    flash(!error, error ? error.message : status === "approved" ? "Disetujui, saldo user bertambah." : "Ditolak, tugas dibuka lagi.");
+    flash(!error, error ? error.message : status === "approved" ? "Disetujui, saldo user bertambah." : "Ditolak, slot kuota dibuka lagi.");
     load();
   }
   async function reviewWd(id: string, status: "paid" | "rejected") {
@@ -161,9 +165,10 @@ export default function Admin() {
               <textarea className="plain-input" rows={4} placeholder={bulk ? "Instruksi umum (dipakai jika baris tidak punya tanda |)" : "Instruksi (hanya tampil setelah user menekan Kerjakan)"} value={desc} onChange={e => setDesc(e.target.value)} />
               <input className="plain-input" inputMode="numeric" placeholder="Imbalan (Rp)" value={reward} onChange={e => setReward(e.target.value.replace(/\D/g, ""))} />
               <input className="plain-input" inputMode="numeric" placeholder="Waktu pengerjaan (menit)" value={duration} onChange={e => setDuration(e.target.value.replace(/\D/g, ""))} />
+              <input className="plain-input" inputMode="numeric" placeholder="Kuota (berapa user berbeda yang boleh mengerjakan)" value={quota} onChange={e => setQuota(e.target.value.replace(/\D/g, ""))} />
               <button className="m-btn" type="submit">Tambah Tugas</button>
             </form>
-            <p className="muted sm">Di luar, user hanya melihat judul. Instruksi muncul setelah user menekan Kerjakan, dan tugas terkunci untuk user itu selama waktu pengerjaan. Jika waktu habis atau kamu tolak, tugas dibuka lagi.</p>
+            <p className="muted sm">Di luar, user hanya melihat judul. Instruksi muncul setelah user menekan Kerjakan. Tugas bisa dikerjakan sebanyak kuota, oleh akun yang berbeda-beda; satu akun hanya sekali. Jika waktu habis atau kamu tolak, slot kuotanya dibuka lagi untuk user lain.</p>
           </section>
 
           <section className="m-card">
@@ -174,7 +179,7 @@ export default function Admin() {
               <div className="admin-task">
                 <div className="grow">
                   <b>{t.title}</b>
-                  <small>{rupiah(t.reward)} · {t.duration_minutes} mnt · {t.status === "active" ? "Aktif" : "Nonaktif"} · {stateOf(t)}</small>
+                  <small>{rupiah(t.reward)} · {t.duration_minutes} mnt · {t.status === "active" ? "Aktif" : "Nonaktif"} · Kuota {usedOf(t.id)}/{t.quota}</small>
                 </div>
                 <button className="icon-btn" title={t.status === "active" ? "Nonaktifkan" : "Aktifkan"} onClick={() => toggle(t)}>{t.status === "active" ? <Eye size={18} /> : <EyeOff size={18} />}</button>
                 <button className="icon-btn danger" title="Hapus" onClick={() => del(t)}><Trash2 size={18} /></button>
@@ -184,8 +189,11 @@ export default function Admin() {
                 <div className="m-instr">
                   <small>INSTRUKSI</small>
                   <p>{insOf(t.task_details)}</p>
-                  <small>PEMANTAUAN</small>
-                  <p>{stateOf(t)}{t.claimed_at ? `\nMulai dikerjakan: ${dateTime(t.claimed_at)}` : ""}{t.submitted_at ? `\nDikirim: ${dateTime(t.submitted_at)}${used(t.claimed_at, t.submitted_at) !== null ? ` (${used(t.claimed_at, t.submitted_at)} menit dari ${t.duration_minutes} menit)` : ""}` : ""}</p>
+                  <small>PEMANTAUAN · KUOTA {usedOf(t.id)}/{t.quota}</small>
+                  {claimsOf(t.id).length === 0 && <p>Belum ada yang mengambil.</p>}
+                  {claimsOf(t.id).map(c => (
+                    <p key={c.user_id}>{`${c.user?.full_name || "-"} (${c.user?.email})\n${claimLabel(c)}\nMulai: ${dateTime(c.claimed_at)}`}{c.submitted_at ? `\nDikirim: ${dateTime(c.submitted_at)}${used(c.claimed_at, c.submitted_at) !== null ? ` (${used(c.claimed_at, c.submitted_at)} menit dari ${t.duration_minutes} menit)` : ""}` : ""}</p>
+                  ))}
                 </div>
               )}
               </div>
@@ -219,7 +227,7 @@ export default function Admin() {
                 <small>INSTRUKSI</small>
                 <p>{insOf(s.task.task_details)}</p>
                 <small>RINCIAN</small>
-                <p>{`Imbalan ${rupiah(s.task.reward)} · durasi ${s.task.duration_minutes} menit`}{s.task.claimed_at ? `\nMulai dikerjakan: ${dateTime(s.task.claimed_at)}` : ""}{`\nDikirim: ${dateTime(s.created_at)}`}{used(s.task.claimed_at, s.created_at) !== null ? ` (${used(s.task.claimed_at, s.created_at)} menit)` : ""}{`\nPengerja: ${s.user?.full_name || "-"} (${s.user?.email})`}</p>
+                <p>{`Imbalan ${rupiah(s.task.reward)} · durasi ${s.task.duration_minutes} menit`}{claimOfSub(s) ? `\nMulai dikerjakan: ${dateTime(claimOfSub(s)!.claimed_at)}` : ""}{`\nDikirim: ${dateTime(s.created_at)}`}{used(claimOfSub(s)?.claimed_at, s.created_at) !== null ? ` (${used(claimOfSub(s)?.claimed_at, s.created_at)} menit)` : ""}{`\nPengerja: ${s.user?.full_name || "-"} (${s.user?.email})`}</p>
               </div>
             )}
             </div>
