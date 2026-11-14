@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { isVip } from "@/lib/vip";
 import { useProfile } from "@/lib/useProfile";
 import Shell, { Loading } from "@/components/Shell";
 import { rupiah } from "@/lib/format";
-import { Search, Send, ChevronRight, Lock, Hourglass, CheckCircle2, Timer, Play, XCircle, Users } from "lucide-react";
+import { Crown, Search, Send, ChevronRight, Lock, Hourglass, CheckCircle2, Timer, Play, XCircle, Users } from "lucide-react";
 
 type Board = {
   id: string; title: string; reward: number; duration_minutes: number; quota: number; status: string;
-  created_at: string; used: number; my_status: string | null; my_due_at: string | null;
+  created_at: string; used: number; my_status: string | null; my_due_at: string | null; vip_only: boolean;
 };
 
 const fmt = (ms: number) => {
@@ -27,6 +29,14 @@ export default function TugasPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [pct, setPct] = useState(20);
+  const vip = isVip(profile);
+  const boost = (n: number) => Math.round(n * (100 + pct) / 100);
+
+  useEffect(() => {
+    supabase.from("app_settings").select("value").eq("key", "vip_bonus_percent").maybeSingle()
+      .then(({ data }) => { if (data?.value) setPct(Number(data.value) || 0); });
+  }, []);
 
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
 
@@ -107,19 +117,24 @@ export default function TugasPage() {
           const left = Math.max(0, t.quota - t.used);
           const due = t.my_due_at ? new Date(t.my_due_at).getTime() : 0;
           const working = st === "working";
-          const canStart = (st === null || st === "expired") && free;
-          const full = (st === null || st === "expired") && !free;
+          const canStart = (st === null || st === "expired") && free && !vipLock;
+          const vipLock = t.vip_only && !vip && (st === null || st === "expired");
+          const full = (st === null || st === "expired") && !free && !vipLock;
 
           return (
             <article key={t.id} className={`m-task ${full ? "taken" : ""} ${working ? "active" : ""}`}>
               <div className="task-meta">
                 <span className="tag">
-                  {working ? "SEDANG KAMU KERJAKAN" : st === "submitted" || st === "approved" ? "TUGAS KAMU" : st === "rejected" ? "DITOLAK" : full ? "KUOTA PENUH" : "TUGAS TERSEDIA"}
+                  {vipLock ? "KHUSUS VIP" : working ? "SEDANG KAMU KERJAKAN" : st === "submitted" || st === "approved" ? "TUGAS KAMU" : st === "rejected" ? "DITOLAK" : full ? "KUOTA PENUH" : "TUGAS TERSEDIA"}
                 </span>
                 <span className="date"><Timer size={12} /> {t.duration_minutes} mnt</span>
               </div>
               <h3>{t.title}</h3>
-              <div className="m-price"><b>{rupiah(t.reward)}</b> <small>/ tugas</small></div>
+              <div className="m-price">
+                {vip
+                  ? <><b>{rupiah(boost(t.reward))}</b> <small>/ tugas · VIP +{pct}%</small></>
+                  : <><b>{rupiah(t.reward)}</b> <small>/ tugas</small>{pct > 0 && <div className="m-vip-hint"><Crown size={13} /> VIP: {rupiah(boost(t.reward))}</div>}</>}
+              </div>
               <div className="m-quota"><Users size={14} /> Sisa kuota <b>{st === "expired" && t.used >= t.quota ? 1 : left}</b> dari {t.quota}</div>
 
               {(working || st === "submitted" || st === "approved") && (
@@ -138,6 +153,7 @@ export default function TugasPage() {
               {st === "submitted" && <button className="m-btn ghost" disabled><Hourglass size={18} /> Menunggu pemeriksaan</button>}
               {st === "approved" && <button className="m-btn ghost" disabled><CheckCircle2 size={18} /> Disetujui</button>}
               {st === "rejected" && <button className="m-btn ghost" disabled><XCircle size={18} /> Ditolak, tidak bisa diulang</button>}
+              {vipLock && <Link href="/vip" className="m-btn vip"><Crown size={18} /> Khusus VIP · Upgrade</Link>}
               {full && <button className="m-btn ghost" disabled><Lock size={18} /> Kuota sudah penuh</button>}
               {canStart && (
                 <button className="m-btn" disabled={busy === t.id} onClick={() => start(t)}>
