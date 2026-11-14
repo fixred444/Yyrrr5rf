@@ -143,3 +143,7 @@ button:active:not(:disabled),.m-quick-item:active,.m-nav-item:active{transform:s
 .admin-wrap>.link-btn{margin-left:2px}
 .submission-info .link-btn{display:block;margin-top:2px}
 .admin-wrap .m-instr{margin-top:8px;margin-bottom:0}
+
+/* ===== Kuota ===== */
+.m-quota{display:flex;align-items:center;gap:6px;color:#5c6f80;font-size:14px;margin:-6px 0 14px}.m-quota b{color:#1b6fd8}
+.m-instr p+p{border-top:1px dashed #cfe2f3;padding-top:8px}
