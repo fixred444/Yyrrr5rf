@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import Shell, { Loading } from "@/components/Shell";
 import { rupiah } from "@/lib/format";
+import { Crown } from "lucide-react";
+import { isVip } from "@/lib/vip";
 import { Download, History, Send, Wallet, ScrollText, Gift, CheckCircle2, Clock, XCircle, ListChecks, ChevronRight, Scale } from "lucide-react";
 
 export default function Dashboard() {
@@ -76,6 +78,12 @@ export default function Dashboard() {
       <Link href="/aturan" className="m-card m-row-link">
         <span className="m-round"><Scale size={22} /></span>
         <span className="grow"><b>Syarat &amp; Ketentuan</b><small>Baca ketentuan penggunaan platform</small></span>
+        <ChevronRight size={18} />
+      </Link>
+
+      <Link href="/vip" className="m-card m-row-link m-vip-card">
+        <span className="m-round gold"><Crown size={22} /></span>
+        <span className="grow"><b>{isVip(profile) ? "Akun VIP aktif" : "Upgrade ke VIP"}</b><small>{isVip(profile) ? "Rate tugasmu naik. Lihat detail" : "Rate per tugas naik + tugas khusus VIP"}</small></span>
         <ChevronRight size={18} />
       </Link>
 
