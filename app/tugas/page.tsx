@@ -5,12 +5,11 @@ import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import Shell, { Loading } from "@/components/Shell";
 import { rupiah } from "@/lib/format";
-import { Search, Send, ChevronRight, Lock, Hourglass, CheckCircle2, Timer, Play } from "lucide-react";
+import { Search, Send, ChevronRight, Lock, Hourglass, CheckCircle2, Timer, Play, XCircle, Users } from "lucide-react";
 
-type Task = {
-  id: string; title: string; reward: number; duration_minutes: number; status: string;
-  claimed_by: string | null; claimed_at: string | null; due_at: string | null; submitted_at: string | null;
-  created_at: string;
+type Board = {
+  id: string; title: string; reward: number; duration_minutes: number; quota: number; status: string;
+  created_at: string; used: number; my_status: string | null; my_due_at: string | null;
 };
 
 const fmt = (ms: number) => {
@@ -22,8 +21,7 @@ const fmt = (ms: number) => {
 
 export default function TugasPage() {
   const { profile, loading } = useProfile();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [mine, setMine] = useState<Record<string, string>>({});
+  const [tasks, setTasks] = useState<Board[]>([]);
   const [details, setDetails] = useState<Record<string, string>>({});
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,12 +32,8 @@ export default function TugasPage() {
 
   const load = useCallback(async () => {
     if (!profile) return;
-    const [{ data: t }, { data: s }] = await Promise.all([
-      supabase.from("tasks").select("*").order("created_at", { ascending: false }),
-      supabase.from("submissions").select("task_id,status").eq("user_id", profile.id)
-    ]);
-    setTasks((t || []) as Task[]);
-    setMine(Object.fromEntries((s || []).map(x => [x.task_id, x.status])));
+    const { data } = await supabase.rpc("task_board");
+    setTasks((data || []) as Board[]);
   }, [profile]);
 
   useEffect(() => {
@@ -47,19 +41,25 @@ export default function TugasPage() {
     load();
     const ch = supabase.channel("tasks-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_claims" }, () => load())
       .subscribe();
-    const timer = setInterval(load, 20000);
+    const timer = setInterval(load, 10000);
     return () => { supabase.removeChannel(ch); clearInterval(timer); };
   }, [profile, load]);
 
-  // Tugas milik saya yang instruksinya boleh dibuka (sedang dikerjakan / sudah dikirim)
-  const openIds = useMemo(() => {
-    if (!profile) return "";
-    return tasks
-      .filter(t => t.claimed_by === profile.id && (t.submitted_at || (t.due_at && new Date(t.due_at).getTime() > now)))
-      .map(t => t.id).sort().join(",");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, profile, Math.floor(now / 5000)]);
+  // Status saya untuk tiap tugas (working yang sudah lewat waktu dianggap expired)
+  const myState = useCallback((t: Board) => {
+    const due = t.my_due_at ? new Date(t.my_due_at).getTime() : 0;
+    if (t.my_status === "expired" || (t.my_status === "working" && due <= now)) return "expired";
+    return t.my_status;
+  }, [now]);
+
+  // Tugas yang instruksinya boleh saya buka
+  const openIds = useMemo(() =>
+    tasks.filter(t => { const s = myState(t); return s === "working" || s === "submitted" || s === "approved"; })
+      .map(t => t.id).sort().join(","),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [tasks, Math.floor(now / 5000)]);
 
   useEffect(() => {
     if (!openIds) { setDetails({}); return; }
@@ -72,18 +72,18 @@ export default function TugasPage() {
     return tasks.filter(t => !k || t.title.toLowerCase().includes(k));
   }, [tasks, q]);
 
-  async function run(fn: "claim_task" | "submit_task", t: Task, okText: string) {
+  async function run(fn: "claim_task" | "submit_task", t: Board, okText: string) {
     setBusy(t.id); setMsg(null);
     const { error } = await supabase.rpc(fn, { p_task_id: t.id });
     setBusy(null);
     setMsg(error ? { ok: false, text: error.message } : { ok: true, text: okText });
     await load();
   }
-  function start(t: Task) {
-    if (!window.confirm(`Kerjakan "${t.title}"? Waktumu ${t.duration_minutes} menit dan tugas ini akan terkunci untuk user lain.`)) return;
+  function start(t: Board) {
+    if (!window.confirm(`Kerjakan "${t.title}"? Waktumu ${t.duration_minutes} menit. Satu akun hanya bisa mengerjakan tugas ini sekali.`)) return;
     run("claim_task", t, "Tugas dimulai. Baca instruksi lalu kerjakan sebelum waktu habis.");
   }
-  function done(t: Task) {
+  function done(t: Board) {
     if (!window.confirm("Yakin tugas ini sudah selesai dikerjakan?")) return;
     run("submit_task", t, "Terkirim. Menunggu pemeriksaan admin.");
   }
@@ -102,48 +102,44 @@ export default function TugasPage() {
         {list.length === 0 && <div className="empty"><h3>Belum ada tugas.</h3><p>Tugas baru dari admin akan muncul di sini.</p></div>}
 
         {list.map(t => {
-          const due = t.due_at ? new Date(t.due_at).getTime() : 0;
-          const isMine = t.claimed_by === profile.id;
-          const submitted = !!t.claimed_by && !!t.submitted_at;
-          const working = !!t.claimed_by && !t.submitted_at && due > now;
-          const available = !t.claimed_by || (!t.submitted_at && due <= now);
-          const myWorking = isMine && working;
-          const mySubmitted = isMine && submitted;
-          const taken = !isMine && !available;
-          const m = mine[t.id];
+          const st = myState(t);
+          const free = st === "expired" ? true : t.used < t.quota;   // slot milik saya yang kedaluwarsa sudah bebas
+          const left = Math.max(0, t.quota - t.used);
+          const due = t.my_due_at ? new Date(t.my_due_at).getTime() : 0;
+          const working = st === "working";
+          const canStart = (st === null || st === "expired") && free;
+          const full = (st === null || st === "expired") && !free;
 
           return (
-            <article key={t.id} className={`m-task ${taken ? "taken" : ""} ${myWorking ? "active" : ""}`}>
+            <article key={t.id} className={`m-task ${full ? "taken" : ""} ${working ? "active" : ""}`}>
               <div className="task-meta">
                 <span className="tag">
-                  {myWorking ? "SEDANG KAMU KERJAKAN" : mySubmitted ? "TUGAS KAMU" : working ? "SEDANG DIKERJAKAN" : submitted ? "SUDAH DIKERJAKAN" : "TUGAS TERSEDIA"}
+                  {working ? "SEDANG KAMU KERJAKAN" : st === "submitted" || st === "approved" ? "TUGAS KAMU" : st === "rejected" ? "DITOLAK" : full ? "KUOTA PENUH" : "TUGAS TERSEDIA"}
                 </span>
                 <span className="date"><Timer size={12} /> {t.duration_minutes} mnt</span>
               </div>
               <h3>{t.title}</h3>
               <div className="m-price"><b>{rupiah(t.reward)}</b> <small>/ tugas</small></div>
+              <div className="m-quota"><Users size={14} /> Sisa kuota <b>{st === "expired" && t.used >= t.quota ? 1 : left}</b> dari {t.quota}</div>
 
-              {(myWorking || mySubmitted) && (
+              {(working || st === "submitted" || st === "approved") && (
                 <div className="m-instr">
                   <small>INSTRUKSI</small>
                   <p>{details[t.id] ?? "Memuat instruksi..."}</p>
                 </div>
               )}
-              {myWorking && <div className="m-timer"><Timer size={16} /> Sisa waktu <b>{fmt(due - now)}</b></div>}
+              {working && <div className="m-timer"><Timer size={16} /> Sisa waktu <b>{fmt(due - now)}</b></div>}
 
-              {myWorking && (
+              {working && (
                 <button className="m-btn" disabled={busy === t.id} onClick={() => done(t)}>
                   {busy === t.id ? "Memproses..." : <><CheckCircle2 size={18} /> Sudah Dikerjakan</>}
                 </button>
               )}
-              {mySubmitted && (
-                <button className="m-btn ghost" disabled>
-                  {m === "approved" ? <><CheckCircle2 size={18} /> Disetujui</> : <><Hourglass size={18} /> Menunggu pemeriksaan</>}
-                </button>
-              )}
-              {!isMine && working && <button className="m-btn ghost" disabled><Lock size={18} /> Sedang dikerjakan user lain</button>}
-              {!isMine && submitted && <button className="m-btn ghost" disabled><Lock size={18} /> Sudah dikerjakan user lain</button>}
-              {available && (
+              {st === "submitted" && <button className="m-btn ghost" disabled><Hourglass size={18} /> Menunggu pemeriksaan</button>}
+              {st === "approved" && <button className="m-btn ghost" disabled><CheckCircle2 size={18} /> Disetujui</button>}
+              {st === "rejected" && <button className="m-btn ghost" disabled><XCircle size={18} /> Ditolak, tidak bisa diulang</button>}
+              {full && <button className="m-btn ghost" disabled><Lock size={18} /> Kuota sudah penuh</button>}
+              {canStart && (
                 <button className="m-btn" disabled={busy === t.id} onClick={() => start(t)}>
                   {busy === t.id ? "Memproses..." : <><Play size={18} /> Kerjakan <ChevronRight size={18} /></>}
                 </button>
