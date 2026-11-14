@@ -14,6 +14,8 @@ export type Profile = {
   ewallet_number: string | null;
   referral_code: string | null;
   referred_by: string | null;
+  is_vip: boolean;
+  vip_until: string | null;
   created_at: string;
 };
 
