@@ -17,11 +17,16 @@ export default function Dashboard() {
     (async () => {
       const [{ data: subs }, { data: tk }] = await Promise.all([
         supabase.from("submissions").select("status").eq("user_id", profile.id),
-        supabase.from("tasks").select("claimed_by,submitted_at,due_at").eq("status", "active")
+        supabase.rpc("task_board")
       ]);
       const c = (s: string) => (subs || []).filter(x => x.status === s).length;
       const nowMs = Date.now();
-      const open = (tk || []).filter(t => !t.claimed_by || (!t.submitted_at && t.due_at && new Date(t.due_at).getTime() <= nowMs)).length;
+      const open = ((tk || []) as { status: string; quota: number; used: number; my_status: string | null; my_due_at: string | null }[]).filter(t => {
+        if (t.status !== "active") return false;
+        const mine = t.my_status === "working" && t.my_due_at && new Date(t.my_due_at).getTime() <= nowMs ? "expired" : t.my_status;
+        if (mine && mine !== "expired") return false;
+        return mine === "expired" || t.used < t.quota;
+      }).length;
       setStat({ approved: c("approved"), pending: c("pending"), rejected: c("rejected"), open });
     })();
   }, [profile]);
